@@ -49,6 +49,8 @@ pip install matplotlib
 pip install tqdm
 pip install timm==0.5.4
 pip install rospkg
+pip install timm
+pip install opt_einsum
 ```
 
 ## Required Data
