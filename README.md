@@ -48,6 +48,7 @@ pip install tensorboard
 pip install matplotlib 
 pip install tqdm
 pip install timm==0.5.4
+pip install rospkg
 ```
 
 ## Required Data
