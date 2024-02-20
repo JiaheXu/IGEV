@@ -14,7 +14,7 @@ We assume the downloaded pretrained weights are located under the pretrained_mod
 
 You can demo a trained model on pairs of images. To predict stereo for Middlebury, run
 ```
-python demo.py --restore_ckpt ./pretrained_models/sceneflow/sceneflow.pth
+python demo_imgs.py --restore_ckpt ./pretrained_models/sceneflow/sceneflow.pth
 ```
 
 <img src="IGEV-Stereo/demo-imgs.png" width="90%">
