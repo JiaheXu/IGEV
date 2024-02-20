@@ -42,12 +42,7 @@ conda activate IGEV_Stereo
 
 ```
 conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch -c nvidia
-pip install opencv-python
-pip install scikit-image
-pip install tensorboard
-pip install matplotlib 
-pip install tqdm
-pip install timm==0.5.4
+pip install opencv-python scikit-image tensorboard matplotlib tqdm timm==0.5.4 rospkg opt_einsum
 ```
 
 ## Required Data
