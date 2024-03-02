@@ -1,0 +1,10 @@
+xhost +local:root
+DATA_PATH=~/
+docker run \
+    --gpus all \
+    --privileged \
+    -e DISPLAY=${DISPLAY} \
+    -v /tmp/.X11-unix:/tmp/.X11-unix \
+    -v $DATA_PATH:/ws \
+    -v /usr/local/cuda-12.3:/usr/local/cuda-12.3 \
+    --network=host --name IGEV -it jiahexu98/igev_neotic:latest
