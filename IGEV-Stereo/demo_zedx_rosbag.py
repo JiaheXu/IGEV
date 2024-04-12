@@ -45,50 +45,40 @@ class igev_stereo():
         
         self.distCoeffs1 = []
         self.distCoeffs2 = []
-        # 2k setting, need to modify into yaml file in the future 1242 * 2208
-        self.cameraMatrix1.append( np.array([
-            [1056.7081298828125, 0., 1102.6148681640625],
-            [0. ,1056.7081298828125,  612.7953491210938],
-            [0., 0., 1.0]
-        ]) )
-        self.distCoeffs1.append( np.array( [0., 0., 0., 0., 0.] ) )
-        self.cameraMatrix2.append( np.array([
-            [1056.7081298828125, 0., 1102.6148681640625],
-            [0. ,1056.7081298828125,  612.7953491210938],
-            [0., 0., 1.0]
-        ]) )
-        self.distCoeffs2.append( np.array( [0., 0., 0., 0., 0.] ) )
 
         # 1080p setting, need to modify into yaml file in the future 1080*1920
         self.cameraMatrix1.append( np.array([
-            [1064.29833984375, 0., 958.1749267578125],
-            [0. ,1064.29833984375,  532.0037231445312],
+            [751.4933, 0., 942.0936],
+            [0. ,751.4933,  565.9486],
             [0., 0., 1.0]
         ]) )
         self.distCoeffs1.append( np.array( [0., 0., 0., 0., 0.] ) )
         self.cameraMatrix2.append( np.array([
-            [1064.29833984375, 0., 958.1749267578125],
-            [0. ,1064.29833984375,  532.0037231445312],
+            [751.4933, 0., 942.0936],
+            [0. ,751.4933,  565.9486],
             [0., 0., 1.0]
         ]) )
         self.distCoeffs2.append( np.array( [0., 0., 0., 0., 0.] ) )
 
         # 720p setting, need to modify into yaml file in the future 720*1280
         self.cameraMatrix1.append( np.array([
-            [525.5062255859375, 0., 637.7863159179688],
-            [0. ,525.5062255859375,  354.01727294921875],
+            [751.4933, 0., 942.0936],
+            [0. ,751.4933,  565.9486],
             [0., 0., 1.0]
-        ]) )
+        ]) * 2.0 / 3.0
+        )
+
         self.distCoeffs1.append( np.array( [0., 0., 0., 0., 0.] ) )
         self.cameraMatrix2.append( np.array([
-            [525.5062255859375, 0., 637.7863159179688],
-            [0. ,525.5062255859375,  354.01727294921875],
+            [751.4933, 0., 942.0936],
+            [0. ,751.4933,  565.9486],
             [0., 0., 1.0]
-        ]) )
+        ]) * 2.0 / 3.0 
+        )
         self.distCoeffs2.append( np.array( [0., 0., 0., 0., 0.] ) )
 
         self.imageSize = []
-        self.imageSize.append( (1242, 2208) )
+
         self.imageSize.append( (1080, 1920) )
         self.imageSize.append( (720, 1280) )
         self.R = np.array([ 
@@ -113,9 +103,9 @@ class igev_stereo():
         self.depth_sub = message_filters.Subscriber(args.depth_topic, Image)
         self.conf_map_sub = message_filters.Subscriber(args.conf_map_topic, Image)
 
-        self.disparity_pub = rospy.Publisher("zed2/disparity", PointCloud2, queue_size=1)
+        self.disparity_pub = rospy.Publisher("zedx/disparity", PointCloud2, queue_size=1)
 
-        self.point_cloud_pub = rospy.Publisher("zed2/point_cloud2", PointCloud2, queue_size=1)
+        self.point_cloud_pub = rospy.Publisher("zedx/point_cloud2", PointCloud2, queue_size=1)
 
         self.ts = message_filters.ApproximateTimeSynchronizer([self.cam1_sub, self.cam2_sub, self.depth_sub, self.conf_map_sub], 10, 1, allow_headerless=True)
         self.ts.registerCallback(self.callback)
@@ -126,23 +116,21 @@ class igev_stereo():
         return img[None].to(DEVICE)
 
     def disparity_to_depth(self, disparity):
-        focal_length = 525.5062255859375
+        focal_length = 751.4933 * 2.0 /3.0
         
         if(disparity.shape[0] == 1080):
-            focal_length = 1064.29833984375
-        if(disparity.shape[0] == 1242):
-            focal_length = 1056.7081298828125
+            focal_length = 751.4933
+
         depth = (0.12 * focal_length) / disparity
         # depth_valid =  np.logical_and( np.logical_not(np.isnan(image_depth_np)), np.logical_not(np.isinf(image_depth_np)) )
         return depth
 
     def depth_to_disparity(self, depth):
-        focal_length = 525.5062255859375
+        focal_length = 751.4933 * 2.0 /3.0
         
         if(depth.shape[0] == 1080):
-            focal_length = 1064.29833984375
-        if(depth.shape[0] == 1242):
-            focal_length = 1056.7081298828125
+            focal_length = 751.4933
+
         disparity = (0.12 * focal_length) / depth
         
         return disparity
@@ -182,22 +170,25 @@ class igev_stereo():
 
             image_depth = bridge.imgmsg_to_cv2(depth_msg)
             image_depth_np = np.array(image_depth)
+            conf_map = bridge.imgmsg_to_cv2(conf_map_msg)
+            conf_map_np = np.array(conf_map)
+
+            # downsampel to 720p to speed up
+            if(self.args.downsampling):
+                image1_np = cv2.resize(image1_np,(1280,720))
+                image2_np = cv2.resize(image2_np,(1280,720))
+                image_depth_np = cv2.resize(image_depth_np,(1280,720))
+                conf_map_np = cv2.resize(conf_map_np,(1280,720))
 
             depth_valid =  np.logical_and( np.logical_not(np.isnan(image_depth_np)), np.logical_not(np.isinf(image_depth_np)) )
             # image_depth_np[depth_valid == False] = np.max( image_depth_np[depth_valid == True] )
-
-            conf_map = bridge.imgmsg_to_cv2(conf_map_msg)
-            conf_map_np = np.array(conf_map)
 
             print("image1.shape: ", image1_np.shape)
             print("image2.shape: ", image2_np.shape)
             cv2.imwrite('img1.png', image1_np)
             cv2.imwrite('img2.png', image2_np)
 
-            # downsampel to 720p to speed up
-            if(self.args.downsampling):
-                image1_np = cv2.resize(image1_np,(1280,720))
-                image2_np = cv2.resize(image2_np,(1280,720))
+
 
             # preprocess FOR igev
             image1= self.load_image(image1_np)
@@ -219,13 +210,14 @@ class igev_stereo():
 
             print("default_disp: ", default_disp.shape)
             igev_disp = np.float32( igev_disp )
+
             # minn = min( np.min(default_disp[depth_valid]), np.min(igev_disp) )
             # maxx = max( np.max(default_disp[depth_valid]), np.max(igev_disp) )
             minn = 0.0
             maxx = 200
             # print("minn: ", minn)
             # print("maxx: ", maxx)
-            
+
             std_igev_disp = (igev_disp - minn ) / (maxx - minn)
             std_default_disp = ( default_disp - minn ) / (maxx - minn)
             
@@ -262,71 +254,51 @@ class igev_stereo():
             merge_depth = self.merge(image_depth_np, conf_map_np, depth_valid, igev_depth, conf_threshold = 2)
             merge_disp = self.depth_to_disparity(merge_depth)
             std_merge_disp = ( merge_disp - minn ) / (maxx - minn)
-            plt.imsave("merge_disp.png", std_merge_disp, cmap='jet')
+            plt.imsave("merge_disp.png", std_merge_disp, cmap='jet')         
 
 
-            # opencv disparity bad
-            # stereo = cv2.StereoBM_create(numDisparities=96, blockSize=15)
-            # image1_gray = cv2.cvtColor(image1_np, cv2.COLOR_RGB2GRAY)
-            # image2_gray = cv2.cvtColor(image2_np, cv2.COLOR_RGB2GRAY)
-            # disparity = stereo.compute(image1_gray, image2_gray)
-            # std_opencv_disp = ( disparity - minn ) / (maxx - minn)
-            # plt.imsave("opencv_disp.png",std_opencv_disp,cmap='jet')
+            # rgb point cloud, reference : https://gist.github.com/lucasw/ea04dcd65bc944daea07612314d114bb
+            disp = igev_disp
+            image_3d = cv2.reprojectImageTo3D(disp, self.Q[0])
+            if(self.args.downsampling == True):
+                image_3d = cv2.reprojectImageTo3D(disp, self.Q[1])
 
-            # following code are used for generating RGB point cloud
-            # gray_frame = diff   #cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
-            # fig, ax = plt.subplots()
-            # cs = ax.add_image(gray_frame)
-            # fig.colorbar(cs)
-            # plt.savefig("diff.png")
+            points = []
+            lim = 8
+            for i in range( image_3d.shape[0] ):
+                for j in range(image_3d.shape[1]):
+                        x = image_3d[i][j][0]
+                        y = image_3d[i][j][1]
+                        z = image_3d[i][j][2]
+                        b = image1_np[i][j][0]
+                        g = image1_np[i][j][1]
+                        r = image1_np[i][j][2]
+                        a = 255
+                        # print r, g, b, a
+                        rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
+                        # print hex(rgb)
+                        pt = [x, y, z, rgb]
+                        points.append(pt)
+            print("finished")   
+            fields = [PointField('x', 0, PointField.FLOAT32, 1),
+                    PointField('y', 4, PointField.FLOAT32, 1),
+                    PointField('z', 8, PointField.FLOAT32, 1),
+                    PointField('rgba', 12, PointField.UINT32, 1),
+                    ]
 
-            # print("difference: ", diff )
-            # np.testing.assert_allclose(igev_depth, image_depth_np[0], rtol=10, atol=0.1)
-
-            # print("disparity shape: ", disp.shape)
-            # print("image_depth shape:", image_depth_np.shape)
-            # plt.imsave("IGEV.png", disp.squeeze(), cmap='jet')
-
-            # image_3d = cv2.reprojectImageTo3D(disp, self.Q)
-            # print("image_3d: ", image_3d.shape)            
-            # # rgb point cloud, reference : https://gist.github.com/lucasw/ea04dcd65bc944daea07612314d114bb
-            # points = []
-            # lim = 8
-            # for i in range( image_3d.shape[0] ):
-            #     for j in range(image_3d.shape[1]):
-            #             x = image_3d[i][j][0]
-            #             y = image_3d[i][j][1]
-            #             z = image_3d[i][j][2]
-            #             b = image1_np[i][j][0]
-            #             g = image1_np[i][j][1]
-            #             r = image1_np[i][j][2]
-            #             a = 255
-            #             # print r, g, b, a
-            #             rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
-            #             # print hex(rgb)
-            #             pt = [x, y, z, rgb]
-            #             points.append(pt)
-            # print("finished")   
-            # fields = [PointField('x', 0, PointField.FLOAT32, 1),
-            #         PointField('y', 4, PointField.FLOAT32, 1),
-            #         PointField('z', 8, PointField.FLOAT32, 1),
-            #         # PointField('rgb', 12, PointField.UINT32, 1),
-            #         PointField('rgba', 12, PointField.UINT32, 1),
-            #         ]
-
-            # header = Header()
-            # header.frame_id = "map"
+            header = Header()
+            header.frame_id = "A"
             
-            # pc2 = point_cloud2.create_cloud(header, fields, points)
-            # pc2.header.stamp = rospy.Time.now()
-            # self.point_cloud_pub.publish(pc2)
+            pc2 = point_cloud2.create_cloud(header, fields, points)
+            pc2.header.stamp = rospy.Time.now()
+            self.point_cloud_pub.publish(pc2)
     def run(self):
         rospy.spin()  
 
 
 
 def demo(args):
-    rospy.init_node("igev_node")
+    rospy.init_node("zedx_igev_node")
     igev_stereo_node = igev_stereo(args)
     igev_stereo_node.run()
 
@@ -343,10 +315,6 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--left_imgs', help="path to all first (left) frames", default="./demo-imgs/*/im0.png")
     parser.add_argument('-r', '--right_imgs', help="path to all second (right) frames", default="./demo-imgs/*/im1.png")
 
-    # parser.add_argument('-l', '--left_imgs', help="path to all first (left) frames", default="/data/Middlebury/trainingH/*/im0.png")
-    # parser.add_argument('-r', '--right_imgs', help="path to all second (right) frames", default="/data/Middlebury/trainingH/*/im1.png")
-    # parser.add_argument('-l', '--left_imgs', help="path to all first (left) frames", default="/data/ETH3D/two_view_training/*/im0.png")
-    # parser.add_argument('-r', '--right_imgs', help="path to all second (right) frames", default="/data/ETH3D/two_view_training/*/im1.png")
     parser.add_argument('--output_directory', help="directory to save output", default="./demo-output/")
     parser.add_argument('--mixed_precision', action='store_true', help='use mixed precision')
     parser.add_argument('--valid_iters', type=int, default=32, help='number of flow-field updates during forward pass')
@@ -362,11 +330,12 @@ if __name__ == '__main__':
     parser.add_argument('--n_gru_layers', type=int, default=3, help="number of hidden GRU levels")
     parser.add_argument('--max_disp', type=int, default=192, help="max disp of geometry encoding volume")
 
-    parser.add_argument('--left_topic', type=str, default="/zed2/zed_node/left/image_rect_color", help="left cam topic")
-    parser.add_argument('--right_topic', type=str, default="/zed2/zed_node/right/image_rect_color", help="right cam topic")
-    parser.add_argument('--depth_topic', type=str, default="/zed2/zed_node/depth/depth_registered", help="depth cam topic")
-    parser.add_argument('--conf_map_topic', type=str, default="/zed2/zed_node/confidence/confidence_map", help="depth confidence map topic")
+    parser.add_argument('--left_topic', type=str, default="/zedA/zed_node_A/left/image_rect_color", help="left cam topic")
+    parser.add_argument('--right_topic', type=str, default="/zedA/zed_node_A/right/image_rect_color", help="right cam topic")
+    parser.add_argument('--depth_topic', type=str, default="/zedA/zed_node_A/depth/depth_registered", help="depth cam topic")
+    parser.add_argument('--conf_map_topic', type=str, default="/zedA/zed_node_A/confidence/confidence_map", help="depth confidence map topic")
 
+    # parser.add_argument('--downsampling', type=bool, default=False, help="downsampling image dimension")
     parser.add_argument('--downsampling', type=bool, default=False, help="downsampling image dimension")
     args = parser.parse_args()
 
