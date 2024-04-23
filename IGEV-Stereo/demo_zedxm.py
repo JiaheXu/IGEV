@@ -45,53 +45,27 @@ class igev_stereo():
         
         self.distCoeffs1 = []
         self.distCoeffs2 = []
-        # 2k setting, need to modify into yaml file in the future 1242 * 2208
-        self.cameraMatrix1.append( np.array([
-            [1056.7081298828125, 0., 1102.6148681640625],
-            [0. ,1056.7081298828125,  612.7953491210938],
+
+        self.unified_matrix = np.array([
+            [741.0023, 0., 963.9025],
+            [0. ,741.0023,  543.876159],
             [0., 0., 1.0]
-        ]) )
-        self.distCoeffs1.append( np.array( [0., 0., 0., 0., 0.] ) )
-        self.cameraMatrix2.append( np.array([
-            [1056.7081298828125, 0., 1102.6148681640625],
-            [0. ,1056.7081298828125,  612.7953491210938],
-            [0., 0., 1.0]
-        ]) )
-        self.distCoeffs2.append( np.array( [0., 0., 0., 0., 0.] ) )
+        ])
 
         # 1080p setting, need to modify into yaml file in the future 1080*1920
-        self.cameraMatrix1.append( np.array([
-            [751.4933, 0., 942.0936],
-            [0. ,751.4933,  565.9486],
-            [0., 0., 1.0]
-        ]) )
+        self.cameraMatrix1.append( self.unified_matrix )
         self.distCoeffs1.append( np.array( [0., 0., 0., 0., 0.] ) )
-        self.cameraMatrix2.append( np.array([
-            [751.4933, 0., 942.0936],
-            [0. ,751.4933,  565.9486],
-            [0., 0., 1.0]
-        ]) )
+        self.cameraMatrix2.append( self.unified_matrix )
         self.distCoeffs2.append( np.array( [0., 0., 0., 0., 0.] ) )
 
         # 720p setting, need to modify into yaml file in the future 720*1280
-        self.cameraMatrix1.append( np.array([
-            [751.4933, 0., 942.0936],
-            [0. ,751.4933,  565.9486],
-            [0., 0., 1.0]
-        ]) * 2.0 / 3.0
-        )
+        self.cameraMatrix1.append( self.unified_matrix * 2.0 / 3.0)
 
         self.distCoeffs1.append( np.array( [0., 0., 0., 0., 0.] ) )
-        self.cameraMatrix2.append( np.array([
-            [751.4933, 0., 942.0936],
-            [0. ,751.4933,  565.9486],
-            [0., 0., 1.0]
-        ]) * 2.0 / 3.0 
-        )
+        self.cameraMatrix2.append( self.unified_matrix * 2.0 / 3.0 )
         self.distCoeffs2.append( np.array( [0., 0., 0., 0., 0.] ) )
 
         self.imageSize = []
-        self.imageSize.append( (1242, 2208) )
         self.imageSize.append( (1080, 1920) )
         self.imageSize.append( (720, 1280) )
         self.R = np.array([ 
@@ -100,7 +74,7 @@ class igev_stereo():
             [0., 0., 1.],            
         ])
         self.T = np.array([ 
-            [-0.12],
+            [-0.063],
             [0.],
             [0.]            
         ])
@@ -116,9 +90,9 @@ class igev_stereo():
         self.depth_sub = message_filters.Subscriber(args.depth_topic, Image)
         self.conf_map_sub = message_filters.Subscriber(args.conf_map_topic, Image)
 
-        self.disparity_pub = rospy.Publisher("zed2/disparity", PointCloud2, queue_size=1)
+        self.disparity_pub = rospy.Publisher("zedxm/disparity", PointCloud2, queue_size=1)
 
-        self.point_cloud_pub = rospy.Publisher("zed2/point_cloud2", PointCloud2, queue_size=1)
+        self.point_cloud_pub = rospy.Publisher("zedxm/point_cloud2", PointCloud2, queue_size=1)
 
         self.ts = message_filters.ApproximateTimeSynchronizer([self.cam1_sub, self.cam2_sub, self.depth_sub, self.conf_map_sub], 10, 1, allow_headerless=True)
         self.ts.registerCallback(self.callback)
@@ -129,25 +103,24 @@ class igev_stereo():
         return img[None].to(DEVICE)
 
     def disparity_to_depth(self, disparity):
-        focal_length = 751.4933 * 2.0 /3.0
+        #720
+        focal_length = self.unified_matrix[0][0] * 2.0 /3.0
         
         if(disparity.shape[0] == 1080):
-            focal_length = 751.4933
-        if(disparity.shape[0] == 1242):
-            focal_length = 1056.7081298828125
-        depth = (0.12 * focal_length) / disparity
+            focal_length = self.unified_matrix[0][0]
+
+        depth = (0.063 * focal_length) / disparity
         # depth_valid =  np.logical_and( np.logical_not(np.isnan(image_depth_np)), np.logical_not(np.isinf(image_depth_np)) )
         return depth
 
     def depth_to_disparity(self, depth):
-        focal_length = 751.4933 * 2.0 /3.0
+        #720
+        focal_length = self.unified_matrix[0][0] * 2.0 /3.0
         
         if(depth.shape[0] == 1080):
-            focal_length = 751.4933
-        if(depth.shape[0] == 1242):
-            focal_length = 1056.7081298828125
-        disparity = (0.12 * focal_length) / depth
-        
+            focal_length = self.unified_matrix[0][0]
+
+        disparity = (0.063 * focal_length) / depth
         return disparity
 
 
@@ -271,69 +244,48 @@ class igev_stereo():
             std_merge_disp = ( merge_disp - minn ) / (maxx - minn)
             plt.imsave("merge_disp.png", std_merge_disp, cmap='jet')
 
-
-            # opencv disparity bad
-            # stereo = cv2.StereoBM_create(numDisparities=96, blockSize=15)
-            # image1_gray = cv2.cvtColor(image1_np, cv2.COLOR_RGB2GRAY)
-            # image2_gray = cv2.cvtColor(image2_np, cv2.COLOR_RGB2GRAY)
-            # disparity = stereo.compute(image1_gray, image2_gray)
-            # std_opencv_disp = ( disparity - minn ) / (maxx - minn)
-            # plt.imsave("opencv_disp.png",std_opencv_disp,cmap='jet')
-
-            # following code are used for generating RGB point cloud
-            # gray_frame = diff   #cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
-            # fig, ax = plt.subplots()
-            # cs = ax.add_image(gray_frame)
-            # fig.colorbar(cs)
-            # plt.savefig("diff.png")
-
-            # print("difference: ", diff )
-            # np.testing.assert_allclose(igev_depth, image_depth_np[0], rtol=10, atol=0.1)
-
-            # print("disparity shape: ", disp.shape)
-            # print("image_depth shape:", image_depth_np.shape)
-            # plt.imsave("IGEV.png", disp.squeeze(), cmap='jet')
-
-            # image_3d = cv2.reprojectImageTo3D(disp, self.Q)
+            disp = igev_disp
+            image_3d = cv2.reprojectImageTo3D(disp, self.Q[0])
+            if(self.args.downsampling == True):
+                image_3d = cv2.reprojectImageTo3D(disp, self.Q[1])
             # print("image_3d: ", image_3d.shape)            
-            # # rgb point cloud, reference : https://gist.github.com/lucasw/ea04dcd65bc944daea07612314d114bb
-            # points = []
-            # lim = 8
-            # for i in range( image_3d.shape[0] ):
-            #     for j in range(image_3d.shape[1]):
-            #             x = image_3d[i][j][0]
-            #             y = image_3d[i][j][1]
-            #             z = image_3d[i][j][2]
-            #             b = image1_np[i][j][0]
-            #             g = image1_np[i][j][1]
-            #             r = image1_np[i][j][2]
-            #             a = 255
-            #             # print r, g, b, a
-            #             rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
-            #             # print hex(rgb)
-            #             pt = [x, y, z, rgb]
-            #             points.append(pt)
-            # print("finished")   
-            # fields = [PointField('x', 0, PointField.FLOAT32, 1),
-            #         PointField('y', 4, PointField.FLOAT32, 1),
-            #         PointField('z', 8, PointField.FLOAT32, 1),
-            #         # PointField('rgb', 12, PointField.UINT32, 1),
-            #         PointField('rgba', 12, PointField.UINT32, 1),
-            #         ]
+            # rgb point cloud, reference : https://gist.github.com/lucasw/ea04dcd65bc944daea07612314d114bb
+            points = []
+            lim = 8
+            for i in range( image_3d.shape[0] ):
+                for j in range(image_3d.shape[1]):
+                        x = image_3d[i][j][0]
+                        y = image_3d[i][j][1]
+                        z = image_3d[i][j][2]
+                        b = image1_np[i][j][0]
+                        g = image1_np[i][j][1]
+                        r = image1_np[i][j][2]
+                        a = 255
+                        # print r, g, b, a
+                        rgb = struct.unpack('I', struct.pack('BBBB', b, g, r, a))[0]
+                        # print hex(rgb)
+                        pt = [x, y, z, rgb]
+                        points.append(pt)
+            print("finished")   
+            fields = [PointField('x', 0, PointField.FLOAT32, 1),
+                    PointField('y', 4, PointField.FLOAT32, 1),
+                    PointField('z', 8, PointField.FLOAT32, 1),
+                    PointField('rgba', 12, PointField.UINT32, 1),
+                    ]
 
-            # header = Header()
-            # header.frame_id = "map"
+            header = Header()
+            header.frame_id = "B"
             
-            # pc2 = point_cloud2.create_cloud(header, fields, points)
-            # pc2.header.stamp = rospy.Time.now()
-            # self.point_cloud_pub.publish(pc2)
+            pc2 = point_cloud2.create_cloud(header, fields, points)
+            pc2.header.stamp = rospy.Time.now()
+            self.point_cloud_pub.publish(pc2)
     def run(self):
         rospy.spin()  
 
 
 
 def demo(args):
-    rospy.init_node("igev_node")
+    rospy.init_node("zedxm_igev_node")
     igev_stereo_node = igev_stereo(args)
     igev_stereo_node.run()
 
