@@ -47,11 +47,10 @@ class igev_stereo():
         self.distCoeffs2 = []
 
         self.unified_matrix = np.array([
-            [741.0023, 0., 963.9025],
-            [0. ,741.0023,  543.876159],
+            [739.1656494140625, 0., 951.3283081054688],
+            [0. ,739.1656494140625,  566.4527587890625],
             [0., 0., 1.0]
-        ])
-
+        ]) 
         # 1080p setting, need to modify into yaml file in the future 1080*1920
         self.cameraMatrix1.append( self.unified_matrix )
         self.distCoeffs1.append( np.array( [0., 0., 0., 0., 0.] ) )
@@ -66,6 +65,7 @@ class igev_stereo():
         self.distCoeffs2.append( np.array( [0., 0., 0., 0., 0.] ) )
 
         self.imageSize = []
+
         self.imageSize.append( (1080, 1920) )
         self.imageSize.append( (720, 1280) )
         self.R = np.array([ 
@@ -74,7 +74,7 @@ class igev_stereo():
             [0., 0., 1.],            
         ])
         self.T = np.array([ 
-            [-0.063],
+            [-0.12],
             [0.],
             [0.]            
         ])
@@ -90,9 +90,9 @@ class igev_stereo():
         self.depth_sub = message_filters.Subscriber(args.depth_topic, Image)
         self.conf_map_sub = message_filters.Subscriber(args.conf_map_topic, Image)
 
-        self.disparity_pub = rospy.Publisher("zedxm/disparity", PointCloud2, queue_size=1)
+        # self.disparity_pub = rospy.Publisher("zedx/disparity", PointCloud2, queue_size=1)
 
-        self.point_cloud_pub = rospy.Publisher("zedxm/point_cloud2", PointCloud2, queue_size=1)
+        self.point_cloud_pub = rospy.Publisher("cam1/igev/point_cloud2", PointCloud2, queue_size=1)
 
         self.ts = message_filters.ApproximateTimeSynchronizer([self.cam1_sub, self.cam2_sub, self.depth_sub, self.conf_map_sub], 10, 1, allow_headerless=True)
         self.ts.registerCallback(self.callback)
@@ -109,7 +109,7 @@ class igev_stereo():
         if(disparity.shape[0] == 1080):
             focal_length = self.unified_matrix[0][0]
 
-        depth = (0.063 * focal_length) / disparity
+        depth = (0.12 * focal_length) / disparity
         # depth_valid =  np.logical_and( np.logical_not(np.isnan(image_depth_np)), np.logical_not(np.isinf(image_depth_np)) )
         return depth
 
@@ -120,7 +120,7 @@ class igev_stereo():
         if(depth.shape[0] == 1080):
             focal_length = self.unified_matrix[0][0]
 
-        disparity = (0.063 * focal_length) / depth
+        disparity = (0.12 * focal_length) / depth
         return disparity
 
 
@@ -242,14 +242,15 @@ class igev_stereo():
             merge_depth = self.merge(image_depth_np, conf_map_np, depth_valid, igev_depth, conf_threshold = 2)
             merge_disp = self.depth_to_disparity(merge_depth)
             std_merge_disp = ( merge_disp - minn ) / (maxx - minn)
-            plt.imsave("merge_disp.png", std_merge_disp, cmap='jet')
+            plt.imsave("merge_disp.png", std_merge_disp, cmap='jet')         
 
+
+            # rgb point cloud, reference : https://gist.github.com/lucasw/ea04dcd65bc944daea07612314d114bb
             disp = igev_disp
             image_3d = cv2.reprojectImageTo3D(disp, self.Q[0])
             if(self.args.downsampling == True):
                 image_3d = cv2.reprojectImageTo3D(disp, self.Q[1])
-            # print("image_3d: ", image_3d.shape)            
-            # rgb point cloud, reference : https://gist.github.com/lucasw/ea04dcd65bc944daea07612314d114bb
+
             points = []
             lim = 8
             for i in range( image_3d.shape[0] ):
@@ -274,7 +275,7 @@ class igev_stereo():
                     ]
 
             header = Header()
-            header.frame_id = "B"
+            header.frame_id = "A"
             
             pc2 = point_cloud2.create_cloud(header, fields, points)
             pc2.header.stamp = rospy.Time.now()
@@ -285,7 +286,7 @@ class igev_stereo():
 
 
 def demo(args):
-    rospy.init_node("zedxm_igev_node")
+    rospy.init_node("cam1_igev_node")
     igev_stereo_node = igev_stereo(args)
     igev_stereo_node.run()
 
@@ -302,10 +303,6 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--left_imgs', help="path to all first (left) frames", default="./demo-imgs/*/im0.png")
     parser.add_argument('-r', '--right_imgs', help="path to all second (right) frames", default="./demo-imgs/*/im1.png")
 
-    # parser.add_argument('-l', '--left_imgs', help="path to all first (left) frames", default="/data/Middlebury/trainingH/*/im0.png")
-    # parser.add_argument('-r', '--right_imgs', help="path to all second (right) frames", default="/data/Middlebury/trainingH/*/im1.png")
-    # parser.add_argument('-l', '--left_imgs', help="path to all first (left) frames", default="/data/ETH3D/two_view_training/*/im0.png")
-    # parser.add_argument('-r', '--right_imgs', help="path to all second (right) frames", default="/data/ETH3D/two_view_training/*/im1.png")
     parser.add_argument('--output_directory', help="directory to save output", default="./demo-output/")
     parser.add_argument('--mixed_precision', action='store_true', help='use mixed precision')
     parser.add_argument('--valid_iters', type=int, default=32, help='number of flow-field updates during forward pass')
@@ -321,11 +318,13 @@ if __name__ == '__main__':
     parser.add_argument('--n_gru_layers', type=int, default=3, help="number of hidden GRU levels")
     parser.add_argument('--max_disp', type=int, default=192, help="max disp of geometry encoding volume")
 
-    parser.add_argument('--left_topic', type=str, default="/zedA/zed_node_A/left/image_rect_color", help="left cam topic")
-    parser.add_argument('--right_topic', type=str, default="/zedA/zed_node_A/right/image_rect_color", help="right cam topic")
-    parser.add_argument('--depth_topic', type=str, default="/zedA/zed_node_A/depth/depth_registered", help="depth cam topic")
-    parser.add_argument('--conf_map_topic', type=str, default="/zedA/zed_node_A/confidence/confidence_map", help="depth confidence map topic")
 
+    parser.add_argument('--left_topic', type=str, default="/cam1/zed_node_A/left/image_rect_color", help="left cam topic")
+    parser.add_argument('--right_topic', type=str, default="/cam1/zed_node_A/right/image_rect_color", help="right cam topic")
+    parser.add_argument('--depth_topic', type=str, default="/cam1/zed_node_A/depth/depth_registered", help="depth cam topic")
+    parser.add_argument('--conf_map_topic', type=str, default="/cam1/zed_node_A/confidence/confidence_map", help="depth confidence map topic")
+
+    # parser.add_argument('--downsampling', type=bool, default=False, help="downsampling image dimension")
     parser.add_argument('--downsampling', type=bool, default=False, help="downsampling image dimension")
     args = parser.parse_args()
 

@@ -46,12 +46,11 @@ class igev_stereo():
         self.distCoeffs1 = []
         self.distCoeffs2 = []
 
-
         self.unified_matrix = np.array([
-            [734.1302490234375, 0., 1005.991455078125],
-            [0. ,734.1302490234375,  531.7340087890625],
+            [731.402099609375, 0., 985.076416015625],
+            [0. ,731.402099609375,  558.0054931640625],
             [0., 0., 1.0]
-        ])
+        ]) 
         # 1080p setting, need to modify into yaml file in the future 1080*1920
         self.cameraMatrix1.append( self.unified_matrix )
         self.distCoeffs1.append( np.array( [0., 0., 0., 0., 0.] ) )
@@ -91,7 +90,9 @@ class igev_stereo():
         self.depth_sub = message_filters.Subscriber(args.depth_topic, Image)
         self.conf_map_sub = message_filters.Subscriber(args.conf_map_topic, Image)
 
-        self.point_cloud_pub = rospy.Publisher("zedx2/point_cloud2", PointCloud2, queue_size=1)
+        # self.disparity_pub = rospy.Publisher("zedx/disparity", PointCloud2, queue_size=1)
+
+        self.point_cloud_pub = rospy.Publisher("cam3/igev/point_cloud2", PointCloud2, queue_size=1)
 
         self.ts = message_filters.ApproximateTimeSynchronizer([self.cam1_sub, self.cam2_sub, self.depth_sub, self.conf_map_sub], 10, 1, allow_headerless=True)
         self.ts.registerCallback(self.callback)
@@ -121,6 +122,8 @@ class igev_stereo():
 
         disparity = (0.12 * focal_length) / depth
         return disparity
+
+
 
     def compare_depth(self, depth1, depth2):
         if(depth1.shape != depth2.shape):
@@ -283,7 +286,7 @@ class igev_stereo():
 
 
 def demo(args):
-    rospy.init_node("zedx2_igev_node")
+    rospy.init_node("cam3_igev_node")
     igev_stereo_node = igev_stereo(args)
     igev_stereo_node.run()
 
@@ -315,10 +318,11 @@ if __name__ == '__main__':
     parser.add_argument('--n_gru_layers', type=int, default=3, help="number of hidden GRU levels")
     parser.add_argument('--max_disp', type=int, default=192, help="max disp of geometry encoding volume")
 
-    parser.add_argument('--left_topic', type=str, default="/zedC/zed_node_C/left/image_rect_color", help="left cam topic")
-    parser.add_argument('--right_topic', type=str, default="/zedC/zed_node_C/right/image_rect_color", help="right cam topic")
-    parser.add_argument('--depth_topic', type=str, default="/zedC/zed_node_C/depth/depth_registered", help="depth cam topic")
-    parser.add_argument('--conf_map_topic', type=str, default="/zedC/zed_node_C/confidence/confidence_map", help="depth confidence map topic")
+
+    parser.add_argument('--left_topic', type=str, default="/cam3/zed_node_C/left/image_rect_color", help="left cam topic")
+    parser.add_argument('--right_topic', type=str, default="/cam3/zed_node_C/right/image_rect_color", help="right cam topic")
+    parser.add_argument('--depth_topic', type=str, default="/cam3/zed_node_C/depth/depth_registered", help="depth cam topic")
+    parser.add_argument('--conf_map_topic', type=str, default="/cam3/zed_node_C/confidence/confidence_map", help="depth confidence map topic")
 
     # parser.add_argument('--downsampling', type=bool, default=False, help="downsampling image dimension")
     parser.add_argument('--downsampling', type=bool, default=False, help="downsampling image dimension")
